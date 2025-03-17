@@ -1,23 +1,16 @@
 // import { htmlTagsByCat } from "./dep/html";
 // import htmlTagsFlat from "./dep/html";
 
-// Function to modify text content inside tags
-// function $() {
-//   console.log("Hello World");
-// }
-
 
 function parseTagAttributes(html) {
-    const tagMatch = html.match(/<(\w+)(.*?)\/?>/); // Capture tag name + attributes
-    if (!tagMatch) return null;
+    const tagMatch = html.match(/<(\w+)(.*?)\/?>/);
+    if (!tagMatch) return html;
     
-    const tagName = tagMatch[1]; // Captured tag name
-    const attributesString = tagMatch[2]; // Captured attributes string
+    const tagName = tagMatch[1]; 
+    const attributesString = tagMatch[2]; 
     const attributes = {};
     
-    // Regex to match key-value pairs in the tag's attributes
-    // const attrRegex = /(\w+)=["'](.*?)["']/g;
-    const attrRegex = /(\w+)=["']((?:\\["']|[^"'])*?)["']/g;
+    const attrRegex = /(\w+)=["']((?:.(?!["']\s|\s\w+=))*.?)["']/g;
 
     
     let match;
@@ -27,12 +20,12 @@ function parseTagAttributes(html) {
         
         console.log(match);
         // Check if it's a JS event handler (e.g., onclick, onmouseover)
-        if (key.startsWith('on')) {
-            // Add as a method in the object
-            attributes[key] = new Function(value);
-        } else {
+        // if (key.startsWith('on')) {
+        //     // Add as a method in the object
+        //     attributes[key] = new Function(value);
+        // } else {
             attributes[key] = value;
-        }
+        // }
     }
 
     return {
@@ -44,72 +37,104 @@ function parseTagAttributes(html) {
 // Example Usage
 const htmlTag = `<input type="text" id="taskInput" placeholder="Enter a task" onclick="alert('Clicked!')" JvaL="taskText.trim()" />`;
 
-console.log(parseTagAttributes(htmlTag));
+// console.log(parseTagAttributes(htmlTag));
+
+function ifIsCss(content) {
+    const cssRegex = /^[\s]*(?:@[a-z-]+\s*\([^\)]+\)\s*|[.#]?[a-zA-Z0-9_-]+|\*)\s*\{/gm;
+    const cssMatch = content.match(cssRegex);
+
+    const matches = [...sampleText.matchAll(cssRegex)].map(match => {
+        const selector = match.groups.selector.trim().replace('{', '').trim();
+        const rules = match.groups.rules.trim();
+    
+        return {
+            type: selector.startsWith('@') 
+                ? 'css-media-query' 
+                : selector.startsWith('.') 
+                ? 'css-class-selector'
+                : selector.startsWith('#') 
+                ? 'css-id-selector'
+                : 'css-element-selector',
+            selector,
+            rules
+        };
+    });
+    
+    console.log(JSON.stringify(matches, null, 2));
 
 
+    // if (cssMatch) {
+    //     return true;
+    // }
+    // return false;
+}
+
+function parseDocToStatements(content) {
+    const statements = content.split(';').map(statement => statement.trim());
+    return statements;
+}
+
+// const tagRegex = /<(\w+)([^>]*?)\/?>|<\/(\w+)>|([^<>]+)/g;
+const tagRegex = /<(\w+)([^>]*?)\/?>|<\/(\w+)>|([^<>]+)|<!DOCTYPE\s+([^>]+)>/gi;
+    
+const attrRegex = /(\w+)=["']((?:.(?!["']\s|\s\w+=))*.?)["']/g;
+
+function parseHTMLTag(line, lineNumber) {
+
+    const result = [];
+
+    let match;
+    let currentTag = null;
+
+    let scopesOpen = 0;
+
+    while ((match = tagRegex.exec(line)) !== null) {
+        if (match[1]) { // Opening tag
+            const tagName = match[1];
+            const attributesString = match[2];
+            const attributes = {};
+
+            let attrMatch;
+            while ((attrMatch = attrRegex.exec(attributesString)) !== null) {
+                const key = attrMatch[1];
+                const value = attrMatch[2];
+                attributes[key] = value;
+            }
+
+            currentTag = { tagName, attributes };
+            result.push(currentTag);
+
+        } else if (match[3]) { // Closing tag
+            currentTag = null; // Reset for next tag
+
+        } else if (match[4] && currentTag) { // Inner content
+            currentTag.content = match[4].trim();
+        }
+    }
+
+    return JSON.stringify(result, null, 4);
+}
 
 async function transformHTML(inputFile, outputFile) {
   try {
-    // Read input file
     let data = await Bun.file(inputFile).text();
-
-    // Regex to match text-wrapping tags with content
-    // const transformed = data.replace(/<(p|span|div|h\d)>(.*?)<\/\1>/g, (match, tag, content) => {
-    //     return `<${tag}>${content} Hello Woild</${tag}>`;
-    // });
-
     const fileByLine = data.split("\n");
+    // const fileByTags = data.split(tagRegex);
+    const fileByTags = data.match(tagRegex);
+    console.log("this is split by tag: ", fileByTags);
     const tagsFound = [];
-    for (let i = 0; i < fileByLine.length; i++) {
-        // console.log(fileByLine[i]);
-        fileByLine[i] = fileByLine[i].trim()
-        // const jk = parseTagAttributes(fileByLine[i]);
-        // console.log(jk);
-        // console.log(fileByLine[i]);
-    //   if (fileByLine[i].startsWith("<")) {
-    //     if (fileByLine[i].includes(">")) {
-    //         const posibleTag = fileByLine[i].match(/<(\w+)/);
-        //   const tag = fileByLine[i].match(/<(\w+)/)[1];
-        //   if (htmlTagsFlat.includes(tag)) {
-        //     console.log("Tag found");
-        //     fileByLine[i] = fileByLine[i] + `<!-- HTML Tag: ${tag} -->`;
-        //   }
-        }
-    //   }
+    // for (let i = 0; i < fileByTags.length; i++) {
+    //     fileByTags[i] = fileByTags[i].trim()
+    //     // fileByLine[i] = JSON.stringify(parseTagAttributes(fileByLine[i]));
+    //     fileByTags[i] = parseHTMLTag(fileByTags[i], i);
     // }
-    // fileByLine.forEach((line, index) => {
-    //   if (line.startsWith("<")) {
-    //       line = line.trim() + " Hello World";
-    //       console.log(line);
-        // const tag = line.match(/<(\w+)/)[1];
-        // if (htmlTagsFlat.includes(tag)) {
-        //   console.log("Tag found");
-        //   line = line + `HTML Tag: ${tag}`;
-          // console.log(htmlTagsByCat);
-          // console.log(htmlTagsByCat.metadata);
-          // console.log(htmlTagsByCat.metadata.includes(tag));
-          // console.log(htmlTagsByCat.contentSectioning.includes(tag));
-          // console.log(htmlTagsByCat.textContent.includes(tag));
-          // console.log(htmlTagsByCat.inlineTextSemantics.includes(tag));
-          // console.log(htmlTagsByCat.imageMultimedia.includes(tag));
-          // console.log(htmlTagsByCat.embeddedContent.includes(tag));
-          // console.log(htmlTagsByCat.scripting.includes(tag));
-          // console.log(htmlTagsByCat.demarcatingEdits.includes(tag));
-          // console.log(htmlTagsByCat.tableContent.includes(tag));
-          // console.log(htmlTagsByCat.forms.includes(tag));
-          // console.log(htmlTagsByCat.interactiveElements.includes(tag));
-          // console.log(htmlTagsByCat.webComponents.includes(tag));
-    //     }
-    //   });
-      // console.log(index);
-
-    console.log(fileByLine);
 
     const htmlRegex = /<[^>]+>/g;
     const htmlMatch = data.match(htmlRegex);
 
     // Write transformed content to output file
-    await Bun.write(outputFile, fileByLine);
+    await Bun.write(outputFile, fileByTags);
+    // await Bun.write(outputFile, fileByLine);
     // await Bun.write(outputFile, transformed);
     console.log(`Transformed HTML saved to ${outputFile}`);
   } catch (err) {
@@ -117,7 +142,5 @@ async function transformHTML(inputFile, outputFile) {
   }
 }
 
-// Example usage
-// transformHTML("exampleToDo.html", "output.html");
+transformHTML("exampleToDo.html", "output.json");
 // transformHTML('input.html', 'output.html');
-// export default "native";
